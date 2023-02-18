@@ -1,1 +1,2 @@
-# invaders command line game in Rust
+# invaders 
+command line invaders clone in Rust
