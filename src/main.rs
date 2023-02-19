@@ -6,6 +6,7 @@ use crossterm::{
 };
 use invaders::{
     frame::{self, new_frame, Drawable},
+    invaders::Invaders,
     player::Player,
     render,
 };
@@ -14,7 +15,7 @@ use std::{
     error::Error,
     io::{self, Stdout},
     sync::mpsc,
-    thread,
+    thread::{self, sleep},
     time::{Duration, Instant},
 };
 
@@ -23,11 +24,11 @@ fn main() -> Result<(), Box<dyn Error>> {
     // audio
     let mut audio: Audio = Audio::new();
     audio.add("explode", "sounds/explode.wav");
-    audio.add("lose", "sounds/lose.wav");
+    audio.add("lose", "sounds/samsung.mp3");
     audio.add("move", "sounds/move.wav");
     audio.add("pew", "sounds/pew.wav");
-    audio.add("startup", "sounds/startup.wav");
-    audio.add("win", "sounds/win.wav");
+    audio.add("startup", "sounds/aveIt.wav");
+    audio.add("win", "sounds/ohYes.wav");
     audio.play("startup");
 
     // terminal
@@ -55,6 +56,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     /* GAME */
     let mut player = Player::new();
     let mut instant = Instant::now();
+    let mut invaders = Invaders::new();
     'gameloop: loop {
         // per-frame init
         let delta = instant.elapsed();
@@ -67,6 +69,8 @@ fn main() -> Result<(), Box<dyn Error>> {
                 match key_event.code {
                     KeyCode::Left => player.move_left(),
                     KeyCode::Right => player.move_right(),
+                    KeyCode::Down => player.move_down(),
+                    KeyCode::Up => player.move_up(),
                     KeyCode::Char(' ') => {
                         if player.shoot() {
                             audio.play("pew");
@@ -74,10 +78,9 @@ fn main() -> Result<(), Box<dyn Error>> {
                     }
                     KeyCode::Esc | KeyCode::Char('q') => {
                         audio.play("lose");
+                        sleep(Duration::from_millis(1600));
                         break 'gameloop;
                     }
-                    // KeyCode::Down => player.move_down(),
-                    // KeyCode::Up => player.move_up(),
                     _ => {}
                 }
             }
@@ -85,11 +88,32 @@ fn main() -> Result<(), Box<dyn Error>> {
 
         // updates
         player.update(delta);
+        if invaders.update(delta) {
+            audio.play("move")
+        }
+        if player.detect_hits(&mut invaders) {
+            audio.play("explode");
+        }
 
         // draw and render
-        player.draw(&mut curr_frame);
+        let drawables: Vec<&dyn Drawable> = vec![&player, &invaders];
+        for drawable in drawables {
+            drawable.draw(&mut curr_frame);
+        }
         let _ = render_tx.send(curr_frame);
         thread::sleep(Duration::from_millis(1));
+
+        // win or lose the game
+        if invaders.all_dead() {
+            audio.play("win");
+            sleep(Duration::from_millis(2400));
+            break 'gameloop;
+        }
+        if invaders.reached_bottom() {
+            audio.play("lose");
+            sleep(Duration::from_millis(1600));
+            break 'gameloop;
+        }
     }
 
     /* CLEAN UP */
